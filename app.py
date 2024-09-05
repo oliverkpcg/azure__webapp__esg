@@ -13,7 +13,8 @@ from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.worksheet.dimensions import ColumnDimension, DimensionHolder
 
 def to_excel():
-    response = requests.get("http://localhost:7071/api/azfunc__httptrigger__get_db_information")
+    BASE_URL = os.getenv("BASE_URL")
+    response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information")
     if response.status_code == 200:
         data = response.json()
         dict_of_dfs = {k: pd.DataFrame(v) for k, v in data.items()}
@@ -90,7 +91,8 @@ def page1():
 
     # Function to simulate fetching/updating data
     def get_data():
-        response = requests.get("http://localhost:7071/api/azfunc__httptrigger__get_db_information")
+        BASE_URL = os.getenv("BASE_URL")
+        response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information")
         if response.status_code == 200:
             data = response.json()
             dfs = {k: pd.DataFrame(v) for k, v in data.items()}
