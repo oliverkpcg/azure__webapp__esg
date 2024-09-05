@@ -11,6 +11,8 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.worksheet.dimensions import ColumnDimension, DimensionHolder
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 def to_excel():
     BASE_URL = os.getenv("BASE_URL")
