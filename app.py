@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import os
+import os, logging
 import requests
 import tempfile
 import time
@@ -92,14 +92,19 @@ def page1():
     # Function to simulate fetching/updating data
     def get_data():
         BASE_URL = os.getenv("BASE_URL")
-        response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information")
+        url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information"
+        logging.info(f"url: {url}")
+        response = requests.get(url)
+        logging.info(f"response: {response.content}")
         if response.status_code == 200:
             data = response.json()
+            logging.info(f"data: {data}")
             dfs = {k: pd.DataFrame(v) for k, v in data.items()}
             
         else:
             print(f"Failed to retrieve data. Status code: {response.status_code}")
 
+        logging.info(f"dfs: {dfs}")
         df = dfs["V__LOGGING"]
         df['ID'] = pd.to_datetime(df['ID'])
         df = df.sort_values(by='ID', ascending=False)
