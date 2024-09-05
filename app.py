@@ -15,8 +15,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 def to_excel():
+    DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
     BASE_URL = os.getenv("BASE_URL")
-    response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information")
+    response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}")
     if response.status_code == 200:
         data = response.json()
         dict_of_dfs = {k: pd.DataFrame(v) for k, v in data.items()}
@@ -79,8 +80,9 @@ def page1():
                 file_path = os.path.join(temp_dir, uploaded_file.name)
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
+                DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
                 BASE_URL = os.getenv("BASE_URL")
-                url = f"{BASE_URL}/api/azfunc__httptrigger__upload_file_to_blob"
+                url = f"{BASE_URL}/api/azfunc__httptrigger__upload_file_to_blob?code={DEFAULT_HOST_KEY}"
                 params = {"fp": file_path}
                 response = requests.get(url, params=params)
                 response.text
@@ -93,8 +95,11 @@ def page1():
 
     # Function to simulate fetching/updating data
     def get_data():
+        DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
+        logging.info(f"DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
+        print(f"PRINT DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
         BASE_URL = os.getenv("BASE_URL")
-        url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information"
+        url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}"
         logging.info(f"url: {url}")
         response = requests.get(url)
         logging.info(f"response: {response.content}")
