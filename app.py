@@ -14,7 +14,7 @@ from openpyxl.worksheet.dimensions import ColumnDimension, DimensionHolder
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def to_excel():
+def generate_excel():
     DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
     BASE_URL = os.getenv("BASE_URL")
     response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}")
@@ -70,22 +70,21 @@ def page1():
     # Drag-and-drop file uploader
     uploaded_files = st.file_uploader("Lade die auszuwertenden Files hier hoch", accept_multiple_files=True)
 
+
     if st.button('Download Excel'):
-        excel_data = to_excel()
+        excel_data = generate_excel()
         st.download_button(label='Download der aktuellen Daten als Excel.', data=excel_data, file_name='formatted_data.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     if uploaded_files:
         with tempfile.TemporaryDirectory() as temp_dir:
             for uploaded_file in uploaded_files:
-                file_path = os.path.join(temp_dir, uploaded_file.name)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                binary_content = uploaded_file.read()
                 DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
                 BASE_URL = os.getenv("BASE_URL")
-                url = f"{BASE_URL}/api/azfunc__httptrigger__upload_file_to_blob?code={DEFAULT_HOST_KEY}"
-                params = {"fp": file_path}
-                response = requests.get(url, params=params)
-                response.text
+                blob_name = f"documentuploads/{uploaded_file.name}"
+                params = {"code" : DEFAULT_HOST_KEY, "blob_name" : blob_name}
+                url = f"{BASE_URL}/api/azfunc__httptrigger__upload_file_to_blob"
+                requests.get(url, params = params, data=binary_content)
 
             st.write("All files have been uploaded and saved!")
 
@@ -95,31 +94,34 @@ def page1():
 
     # Function to simulate fetching/updating data
     def get_data():
-        DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
-        logging.info(f"DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
-        print(f"PRINT DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
-        BASE_URL = os.getenv("BASE_URL")
-        url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}"
-        logging.info(f"url: {url}")
-        response = requests.get(url)
-        logging.info(f"response: {response.content}")
-        if response.status_code == 200:
-            data = response.json()
-            logging.info(f"data: {data}")
-            dfs = {k: pd.DataFrame(v) for k, v in data.items()}
-            
-        else:
-            print(f"Failed to retrieve data. Status code: {response.status_code}")
+        try:
+            DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
+            logging.info(f"DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
+            print(f"PRINT DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
+            BASE_URL = os.getenv("BASE_URL")
+            url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}"
+            logging.info(f"url: {url}")
+            response = requests.get(url)
+            logging.info(f"response: {response.content}")
+            if response.status_code == 200:
+                data = response.json()
+                logging.info(f"data: {data}")
+                dfs = {k: pd.DataFrame(v) for k, v in data.items()}
+                
+            else:
+                print(f"Failed to retrieve data. Status code: {response.status_code}")
 
-        logging.info(f"dfs: {dfs}")
-        df = dfs["V__LOGGING"]
-        df['ID'] = pd.to_datetime(df['ID'])
-        df = df.sort_values(by='ID', ascending=False)
-        df['BLOB'] = df['BLOB'].apply(lambda x: '/'.join(x.split('/')[1:]))
-        df = df.rename(columns={'BLOB': 'File-Name'})
-        df = df.rename(columns={'ID': 'Zeitstempel'})
+            logging.info(f"dfs: {dfs}")
+            df = dfs["V__LOGGING"]
+            df['ID'] = pd.to_datetime(df['ID'])
+            df = df.sort_values(by='ID', ascending=False)
+            df['BLOB'] = df['BLOB'].apply(lambda x: '/'.join(x.split('/')[1:]))
+            df = df.rename(columns={'BLOB': 'File-Name'})
+            df = df.rename(columns={'ID': 'Zeitstempel'})
 
-        return df[["Zeitstempel", "File-Name"]]
+            return df[["Zeitstempel", "File-Name"]]
+        except:
+            return None
 
     # Loop to refresh data every 3 seconds
     while True:
@@ -133,14 +135,15 @@ def page2():
     st.write("Welcome to Page 2!")
     st.write("This is the content of the second page.")
 
+# streamlit run app.py 
 # Main function
 def main():
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Page 1", "Page 2"])
+    page = st.sidebar.radio("Go to", ["ESG", "ESG - admin"])
 
-    if page == "Page 1":
+    if page == "ESG":
         page1()
-    elif page == "Page 2":
+    elif page == "ESG - admin":
         page2()
 
 if __name__ == "__main__":
