@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <!-- Sidebar for selection -->
+    <div class="sidebar">
+        <h2>Select Information</h2>
+
+        <!-- Department Dropdown with Main Checkbox -->
+        <div class="dropdown">
+            <button class="dropdown-btn">Department</button>
+            <div class="dropdown-content">
+                <input type="checkbox" id="department_all" onchange="toggleAll('department')"> Select All<br>
+                <div class="checkbox-group">
+                    {% for department in departments %}
+                    <input type="checkbox" id="department_{{ department }}" value="{{ department }}"
+                        onchange="updateMainCheckbox('department')"> {{ department }}<br>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sex Dropdown with Main Checkbox -->
+        <div class="dropdown">
+            <button class="dropdown-btn">Sex</button>
+            <div class="dropdown-content">
+                <input type="checkbox" id="sex_all" onchange="toggleAll('sex')"> Select All<br>
+                <div class="checkbox-group">
+                    {% for sex in sexes %}
+                    <input type="checkbox" id="sex_{{ sex }}" value="{{ sex }}" onchange="updateMainCheckbox('sex')"> {{
+                    sex }}<br>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- City Dropdown with Main Checkbox -->
+        <div class="dropdown">
+            <button class="dropdown-btn">City</button>
+            <div class="dropdown-content">
+                <input type="checkbox" id="city_all" onchange="toggleAll('city')"> Select All<br>
+                <div class="checkbox-group">
+                    {% for city in cities %}
+                    <input type="checkbox" id="city_{{ city }}" value="{{ city }}"
+                        onchange="updateMainCheckbox('city')"> {{ city }}<br>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <button onclick="submitData()">Submit</button>
+    </div>
+
+    <!-- Content area for displaying the plot -->
+    <div class="content-area">
+        <img id="plotImage" src="" alt="Salary Range Plot" style="display: none;">
+    </div>
+</div>
+
+<script>
+    // JavaScript code remains the same as before to handle selection and submission logic
+    function toggleAll(group) {
+        var isChecked = document.getElementById(group + '_all').checked;
+        var checkboxes = document.querySelectorAll(`input[id^=${group}_]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+    }
+
+    function updateMainCheckbox(group) {
+        var allCheckbox = document.getElementById(group + '_all');
+        var checkboxes = document.querySelectorAll(`input[id^=${group}_]:not(#${group}_all)`);
+        var total = checkboxes.length;
+        var checked = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
+
+        if (checked === 0) {
+            allCheckbox.checked = false;
+            allCheckbox.indeterminate = false;
+        } else if (checked === total) {
+            allCheckbox.checked = true;
+            allCheckbox.indeterminate = false;
+        } else {
+            allCheckbox.checked = false;
+            allCheckbox.indeterminate = true;
+        }
+    }
+
+    function submitData() {
+        let selectedData = {
+            department: Array.from(document.querySelectorAll('input[id^=department_]:checked')).map(checkbox => checkbox.value),
+            sex: Array.from(document.querySelectorAll('input[id^=sex_]:checked')).map(checkbox => checkbox.value),
+            city: Array.from(document.querySelectorAll('input[id^=city_]:checked')).map(checkbox => checkbox.value)
+        };
+
+        fetch('/salary-bands', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(selectedData)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const imgElement = document.getElementById('plotImage');
+                    imgElement.src = 'data:image/png;base64,' + data.image;
+                    imgElement.style.display = 'block';  // Make sure the image is visible
+                } else {
+                    console.error('Error generating the plot:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
+</script>
+{% endblock %}

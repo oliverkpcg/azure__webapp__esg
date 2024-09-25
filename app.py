@@ -1,169 +1,68 @@
-import streamlit as st
-import pandas as pd
-import os, logging
-import requests
-import tempfile
-import time
-from dotenv import load_dotenv
-import numpy as np
-from io import BytesIO
-import openpyxl
-from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment
-from openpyxl.worksheet.dimensions import ColumnDimension, DimensionHolder
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from utils import *
+import base64, io
+import matplotlib
+matplotlib.use('Agg')  # Use the non-interactive backend
 
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Needed for session management
 
-# Function to handle authentication
-def login():
-    st.title("Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if username == "pcg" and password == "password1234":
-            st.session_state['authenticated'] = True
+# Set your desired password
+PASSWORD = 'salary1234'
+
+# Generate the test data
+df = generate_test_data(1000)
+
+@app.route('/')
+def landing():
+    return render_template('landing.html')
+
+@app.route('/password', methods=['GET', 'POST'])
+def password():
+    if request.method == 'POST':
+        entered_password = request.form.get('password')
+        if entered_password == PASSWORD:
+            session['authenticated'] = True
+            return redirect(url_for('salary_bands'))
         else:
-            st.error("Invalid username or password")
+            return render_template('password.html', error="Incorrect password")
+    
+    return render_template('password.html')
 
-# Check authentication
-if 'authenticated' not in st.session_state:
-    st.session_state['authenticated'] = False
+@app.route('/salary-bands', methods=['GET', 'POST'])
+def salary_bands():
+    # Check if user is authenticated
+    if not session.get('authenticated'):
+        return redirect(url_for('password'))
+    
+    if request.method == 'POST':
+        selected_items = request.json
+        selected_items = {key: [value for value in values if value != 'on'] for key, values in selected_items.items()}
 
-if not st.session_state['authenticated']:
-    login()
-else:
-    # Function to generate Excel data
-    def generate_excel():
-        DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
-        BASE_URL = os.getenv("BASE_URL")
-        response = requests.get(f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}")
-        if response.status_code == 200:
-            data = response.json()
-            dict_of_dfs = {k: pd.DataFrame(v) for k, v in data.items()}
-            
-        else:
-            print(f"Failed to retrieve data. Status code: {response.status_code}")
-        output = BytesIO()
-        writer = pd.ExcelWriter(output, engine='openpyxl')
+        print(selected_items)  # Print the selected values to the backend
         
-        for sheet_name, df in dict_of_dfs.items():
-            df.to_excel(writer, index=False, sheet_name=sheet_name)
-            workbook = writer.book
-            worksheet = writer.sheets[sheet_name]
-            
-            # Apply formatting
-            for col in worksheet.columns:
-                for cell in col:
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
-                    cell.fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')  # Light blue background
-                    cell.border = openpyxl.styles.Border(
-                        left=openpyxl.styles.Side(border_style='thin', color='000000'),
-                        right=openpyxl.styles.Side(border_style='thin', color='000000'),
-                        top=openpyxl.styles.Side(border_style='thin', color='000000'),
-                        bottom=openpyxl.styles.Side(border_style='thin', color='000000')
-                    )
-
-            # Format top row
-            for cell in worksheet[1]:
-                cell.fill = PatternFill(start_color='A9A9A9', end_color='A9A9A9', fill_type='solid')  # Dark grey background
-                cell.font = Font(bold=True)
-
-            # Auto-adjust column width
-            dim_holder = DimensionHolder(worksheet=worksheet)
-            for col in worksheet.columns:
-                max_length = max(len(str(cell.value)) for cell in col)
-                adjusted_width = (max_length + 2)
-                dim_holder[col[0].column_letter] = ColumnDimension(worksheet, min=col[0].column, max=col[0].column, width=adjusted_width)
-
-            worksheet.column_dimensions = dim_holder
-
-        writer.close()  # Correct way to save the Excel file
-        output.seek(0)  # Move the cursor to the beginning of the stream
-        return output.getvalue()
-
-    # Function for Page 1
-    def page1():
-        st.title("Belege automatisch auswerten")
-        st.write("Lade ein oder mehrere Anträge hoch. Diese werden ausgewertet und du kannst das Ergebnis als Excel runterladen. In unterer Tabelle kannst du den Status verfolgen.")
+        # Generate the plot (your function returns plt object)
+        plt_obj = plot_salary_ranges_by(df, selected_items)  # This returns plt object
         
-        # Drag-and-drop file uploader
-        uploaded_files = st.file_uploader("Lade die auszuwertenden Files hier hoch", accept_multiple_files=True)
+        # Save the plot to a BytesIO object
+        img = io.BytesIO()
+        plt_obj.savefig(img, format='png')
+        img.seek(0)
+        plt_obj.close()  # Close the plt object to free memory
+
+        # Encode image to base64 string
+        img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
+
+        # Return the base64 string of the image as JSON
+        return jsonify({"status": "success", "image": img_base64})
+
+    # Pass DataFrame column values to the template
+    departments = df['department'].unique().tolist()
+    sexes = df['sex'].unique().tolist()
+    cities = df['city'].unique().tolist()
+
+    return render_template('salary_bands.html', departments=departments, sexes=sexes, cities=cities)
 
 
-        if st.button('Download Excel'):
-            excel_data = generate_excel()
-            st.download_button(label='Download der aktuellen Daten als Excel.', data=excel_data, file_name='formatted_data.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
-        if uploaded_files:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                for uploaded_file in uploaded_files:
-                    binary_content = uploaded_file.read()
-                    DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
-                    BASE_URL = os.getenv("BASE_URL")
-                    blob_name = f"documentuploads/{uploaded_file.name}"
-                    params = {"code" : DEFAULT_HOST_KEY, "blob_name" : blob_name}
-                    url = f"{BASE_URL}/api/azfunc__httptrigger__upload_file_to_blob"
-                    requests.get(url, params = params, data=binary_content)
-
-                st.write("All files have been uploaded and saved!")
-
-        # Placeholder for the DataFrame table
-        st.write("Übersicht ausgewertete Files (Lädt alle 3 Sekunden neu):")
-        placeholder = st.empty()
-
-        # Function to simulate fetching/updating data
-        def get_data():
-            try:
-                DEFAULT_HOST_KEY = os.getenv("DEFAULT_HOST_KEY", "default")
-                logging.info(f"DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
-                print(f"PRINT DEFAULT_HOST_KEY: {DEFAULT_HOST_KEY[:5]}")
-                BASE_URL = os.getenv("BASE_URL")
-                url = f"{BASE_URL}/api/azfunc__httptrigger__get_db_information?code={DEFAULT_HOST_KEY}"
-                logging.info(f"url: {url}")
-                response = requests.get(url)
-                logging.info(f"response: {response.content}")
-                if response.status_code == 200:
-                    data = response.json()
-                    logging.info(f"data: {data}")
-                    dfs = {k: pd.DataFrame(v) for k, v in data.items()}
-                    
-                else:
-                    print(f"Failed to retrieve data. Status code: {response.status_code}")
-
-                logging.info(f"dfs: {dfs}")
-                df = dfs["V__LOGGING"]
-                df['ID'] = pd.to_datetime(df['ID'])
-                df = df.sort_values(by='ID', ascending=False)
-                df['BLOB'] = df['BLOB'].apply(lambda x: '/'.join(x.split('/')[1:]))
-                df = df.rename(columns={'BLOB': 'File-Name'})
-                df = df.rename(columns={'ID': 'Zeitstempel'})
-
-                return df[["Zeitstempel", "File-Name"]]
-            except:
-                return None
-
-        # Loop to refresh data every 3 seconds
-        while True:
-            df = get_data()  # Fetch or simulate fetching data
-            placeholder.table(df)  # Update the table in the placeholder
-            time.sleep(3)  # Wait for 3 seconds before refreshing again
-
-    # Function for Page 2
-    def page2():
-        st.title("Admkin panel")
-        st.write("TODO")
-
-    # Main function
-    def main():
-        st.sidebar.title("Navigation")
-        page = st.sidebar.radio("Go to", ["ESG", "ESG - admin"])
-
-        if page == "ESG":
-            page1()
-        elif page == "ESG - admin":
-            page2()
-
-    if __name__ == "__main__":
-        load_dotenv("/Users/oliverkoehn/repos/aiExamples/azure__funcapp__esg/.env")
-        print(f"URL: {os.getenv('BASE_URL')}")
-        main()
+if __name__ == '__main__':
+    app.run(debug=True)
